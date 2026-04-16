@@ -103,6 +103,11 @@ class MonitoringAlert:
         judge_fail_rate = (output_blocked / output_total) if output_total else 0.0
         rate_limit_hit_rate = (rate_blocked / rate_total) if rate_total else 0.0
 
+        session_guard = self._find_plugin("session_anomaly_detector")
+        session_total = getattr(session_guard, "total_count", 0) or 0
+        session_flagged = getattr(session_guard, "flagged_count", 0) or 0
+        session_blocked = getattr(session_guard, "blocked_count", 0) or 0
+
         print("\n" + "=" * 70)
         print("MONITORING METRICS")
         print("=" * 70)
@@ -110,6 +115,14 @@ class MonitoringAlert:
         print(f"Output blocked:       {output_blocked}/{output_total} ({judge_fail_rate:.1%})")
         print(f"Output redacted:      {output_redacted}/{output_total}" if output_total else "Output redacted:      0/0")
         print(f"Rate limit hits:      {rate_blocked}/{rate_total} ({rate_limit_hit_rate:.1%})")
+        print(
+            f"Session anomalies:     {session_flagged}/{session_total}"
+            if session_guard else "Session anomalies:     0/0"
+        )
+        print(
+            f"Session blocks:        {session_blocked}/{session_total}"
+            if session_guard else "Session blocks:        0/0"
+        )
 
         if block_rate > 0.50:
             print("ALERT: Input block rate is unusually high.")
