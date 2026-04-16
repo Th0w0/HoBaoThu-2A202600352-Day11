@@ -53,41 +53,6 @@ async def test_safe_queries(agent, runner):
     print("-" * 60)
     print(f"Safe queries passed: {passed}/{len(safe_queries)}")
 
-
-async def test_rate_limit(agent, runner):
-    print("\n" + "=" * 60)
-    print("RATE LIMIT TEST")
-    print("=" * 60)
-    print("Expected: first 10 pass, last 5 blocked")
-    rate_limiter.user_windows.clear()
-    rate_limiter.blocked_count = 0
-    rate_limiter.total_count = 0
-
-    for plugin in [rate_limiter]:
-        if hasattr(plugin, "user_events"):
-            plugin.user_events.clear()
-    passed = 0
-    blocked = 0
-
-    for i in range(15):
-        try:
-            response, _ = await chat_with_agent(agent, runner, "What is my account balance?")
-            response_lower = response.lower()
-
-            if "rate limit exceeded" in response_lower or "please wait" in response_lower:
-                print(f"{i+1}. BLOCKED - {response[:100]}...")
-                blocked += 1
-            else:
-                print(f"{i+1}. PASS")
-                passed += 1
-
-        except Exception as e:
-            print(f"{i+1}. ERROR - {e}")
-
-    print("-" * 60)
-    print(f"Rate limit summary: PASS={passed}, BLOCKED={blocked}")
-
-
 async def test_edge_cases(agent, runner):
     print("\n" + "=" * 60)
     print("EDGE CASE TEST")
@@ -217,10 +182,17 @@ async def test_rate_limit(agent, runner, rate_limiter):
     print("\n--- RATE LIMIT TEST ---")
     print("Expected: first 10 pass, last 5 blocked")
 
-    # reset state trước khi test
+    # 🔥 RESET TẤT CẢ STATE
     rate_limiter.user_windows.clear()
     rate_limiter.blocked_count = 0
     rate_limiter.total_count = 0
+
+    # reset anomaly detector nếu có
+    for plugin in agent._plugins:   # ⚠️ dùng _plugins (private)
+        if hasattr(plugin, "user_events"):
+            plugin.user_events.clear()
+            plugin.blocked_count = 0
+            plugin.flagged_count = 0
 
     passed = 0
     blocked = 0
@@ -229,11 +201,10 @@ async def test_rate_limit(agent, runner, rate_limiter):
         response, _ = await chat_with_agent(
             agent,
             runner,
-            "What is my account balance?",
+            "Check balance"   # 🔥 đổi query
         )
 
-        response_lower = response.lower()
-        if "rate limit exceeded" in response_lower or "please wait" in response_lower:
+        if "rate limit exceeded" in response.lower():
             print(f"{i+1}: BLOCKED")
             blocked += 1
         else:
