@@ -213,17 +213,6 @@ class SecurityTestPipeline:
             status = "LEAKED" if r.leaked_secrets else "BLOCKED"
             print(f"\n  Attack #{r.attack_id} [{status}]: {r.category}")
 
-        print("\n" + "-" * 70)
-        print(f"  Total attacks:   {metrics['total']}")
-        print(f"  Blocked:         {metrics['blocked']} ({metrics['block_rate']:.0%})")
-        print(f"  Leaked:          {metrics['leaked']} ({metrics['leak_rate']:.0%})")
-        print(f"  Errors:          {metrics['errors']} ({metrics['error_rate']:.0%})")
-
-        if metrics["all_secrets_leaked"]:
-            unique = sorted(set(metrics["all_secrets_leaked"]))
-            print(f"  Secrets leaked:  {unique}")
-
-        print("=" * 70)
 
 
 # ============================================================

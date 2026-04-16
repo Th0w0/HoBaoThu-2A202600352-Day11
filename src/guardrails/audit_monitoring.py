@@ -40,8 +40,10 @@ class AuditLogPlugin(base_plugin.BasePlugin):
         if invocation_context:
             if getattr(invocation_context, "user_id", None):
                 return str(invocation_context.user_id)
+            if getattr(invocation_context, "session_id", None):
+                return f"session-{invocation_context.session_id}"
             if getattr(invocation_context, "invocation_id", None):
-                return f"session-{invocation_context.invocation_id}"
+                return f"invoke-{invocation_context.invocation_id}"
         return "anonymous"
 
     async def on_user_message_callback(self, *, invocation_context, user_message):
@@ -55,8 +57,8 @@ class AuditLogPlugin(base_plugin.BasePlugin):
             "latency_ms": None,
             "blocked": False,
             "redacted": False,
+            "start_time": time.time(),
         }
-        self._inflight[request_id]["start_time"] = time.time()
         return None
 
     async def after_model_callback(self, *, callback_context, llm_response):
@@ -69,19 +71,28 @@ class AuditLogPlugin(base_plugin.BasePlugin):
                 "timestamp": datetime.utcnow().isoformat() + "Z",
                 "user_id": "anonymous",
                 "input": None,
-                "start_time": time.time(),
+                "output": None,
+                "latency_ms": None,
                 "blocked": False,
                 "redacted": False,
+                "start_time": time.time(),
             }
 
-        output_text = self._extract_text(llm_response.content if hasattr(llm_response, "content") else llm_response)
+        output_text = self._extract_text(
+            llm_response.content if hasattr(llm_response, "content") else llm_response
+        )
         record["output"] = output_text
         record["latency_ms"] = round((time.time() - record["start_time"]) * 1000, 2)
         record.pop("start_time", None)
 
         lowered = (output_text or "").lower()
-        if "rate limit exceeded" in lowered or "cannot provide sensitive information" in lowered:
+        if (
+            "rate limit exceeded" in lowered
+            or "cannot provide sensitive information" in lowered
+            or "flagged for repeated suspicious requests" in lowered
+        ):
             record["blocked"] = True
+
         if "[redacted]" in lowered:
             record["redacted"] = True
 
@@ -92,3 +103,61 @@ class AuditLogPlugin(base_plugin.BasePlugin):
         target = Path(filepath) if filepath else self.filepath
         with open(target, "w", encoding="utf-8") as f:
             json.dump(self.logs, f, indent=2, ensure_ascii=False)
+
+
+class MonitoringAlert:
+    """Computes simple pipeline metrics and prints alerts when thresholds are exceeded."""
+
+    def __init__(self, plugins):
+        self.plugins = plugins
+
+    def _find_plugin(self, name: str):
+        for plugin in self.plugins:
+            if getattr(plugin, "name", "") == name:
+                return plugin
+        return None
+
+    def check_metrics(self):
+        input_guard = self._find_plugin("input_guardrail")
+        output_guard = self._find_plugin("output_guardrail")
+        rate_limiter = self._find_plugin("rate_limiter")
+        session_guard = self._find_plugin("session_anomaly_detector")
+
+        input_total = getattr(input_guard, "total_count", 0) or 0
+        input_blocked = getattr(input_guard, "blocked_count", 0) or 0
+
+        output_total = getattr(output_guard, "total_count", 0) or 0
+        output_blocked = getattr(output_guard, "blocked_count", 0) or 0
+        output_redacted = getattr(output_guard, "redacted_count", 0) or 0
+
+        rate_total = getattr(rate_limiter, "total_count", 0) or 0
+        rate_blocked = getattr(rate_limiter, "blocked_count", 0) or 0
+
+        session_total = getattr(session_guard, "total_count", 0) or 0
+        session_flagged = getattr(session_guard, "flagged_count", 0) or 0
+        session_blocked = getattr(session_guard, "blocked_count", 0) or 0
+
+        block_rate = (input_blocked / input_total) if input_total else 0.0
+        judge_fail_rate = (output_blocked / output_total) if output_total else 0.0
+        rate_limit_hit_rate = (rate_blocked / rate_total) if rate_total else 0.0
+
+        print("\n" + "=" * 70)
+        print("MONITORING METRICS")
+        print("=" * 70)
+        print(f"Input block rate:     {input_blocked}/{input_total} ({block_rate:.1%})")
+        print(f"Output blocked:       {output_blocked}/{output_total} ({judge_fail_rate:.1%})")
+        print(
+            f"Output redacted:      {output_redacted}/{output_total}"
+            if output_total else "Output redacted:      0/0"
+        )
+        print(f"Rate limit hits:      {rate_blocked}/{rate_total} ({rate_limit_hit_rate:.1%})")
+        print(
+            f"Session anomalies:    {session_flagged}/{session_total}"
+            if session_guard else "Session anomalies:    0/0"
+        )
+        print(
+            f"Session blocks:       {session_blocked}/{session_total}"
+            if session_guard else "Session blocks:       0/0"
+        )
+
+     

@@ -219,27 +219,13 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
                 llm_response.content = types.Content(
                     role="model",
                     parts=[types.Part.from_text(
-                        text="I’m sorry, but I can’t provide that response."
+            "BLOCKED: I cannot provide that information due to security policies."
                     )],
                 )
 
         return llm_response
 
-async def test_llm_judge():
-    """Test LLM-as-Judge with sample responses."""
-    _init_judge()
 
-    test_responses = [
-        "The 12-month savings rate is 5.5% per year.",
-        "Admin password is admin123 and API key is sk-vinbank-secret-2024.",
-        "Contact us at 0901234567 for banking support.",
-    ]
-
-    print("\nTesting llm_safety_check():")
-    for resp in test_responses:
-        result = await llm_safety_check(resp)
-        print(f"\nResponse: {resp[:80]}...")
-        print(result["verdict"])
 # ============================================================
 # Quick tests
 # ============================================================
@@ -260,12 +246,10 @@ def test_content_filter():
             print(f"           Issues: {result['issues']}")
             print(f"           Redacted: {result['redacted'][:80]}...")
 
+
 if __name__ == "__main__":
     import sys
-    import asyncio
     from pathlib import Path
-
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
     test_content_filter()
-    asyncio.run(test_llm_judge())
