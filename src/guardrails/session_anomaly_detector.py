@@ -10,11 +10,6 @@ class SessionAnomalyDetectorPlugin(base_plugin.BasePlugin):
     """
     Bonus safety layer:
     Detects suspicious repeated probing behavior within a session/user window.
-
-    Why needed:
-    - A single message may not clearly be malicious.
-    - Multiple secret-seeking / prompt-injection-like messages over a short window
-      indicate abnormal behavior and should be blocked.
     """
 
     def __init__(self, max_suspicious_events=3, window_seconds=300):
@@ -47,8 +42,11 @@ class SessionAnomalyDetectorPlugin(base_plugin.BasePlugin):
         ]
 
     def _get_user_id(self, invocation_context) -> str:
-        if invocation_context and getattr(invocation_context, "user_id", None):
-            return str(invocation_context.user_id)
+        if invocation_context:
+            if getattr(invocation_context, "user_id", None):
+                return str(invocation_context.user_id)
+            if getattr(invocation_context, "invocation_id", None):
+                return f"session-{invocation_context.invocation_id}"
         return "anonymous"
 
     def _extract_text(self, content: types.Content) -> str:
@@ -60,7 +58,7 @@ class SessionAnomalyDetectorPlugin(base_plugin.BasePlugin):
         return text
 
     def _is_suspicious(self, text: str) -> bool:
-        text_lower = text.lower()
+        text_lower = (text or "").lower()
         return any(re.search(pattern, text_lower, re.IGNORECASE) for pattern in self.suspicious_patterns)
 
     def _block_response(self, message: str) -> types.Content:
@@ -85,7 +83,8 @@ class SessionAnomalyDetectorPlugin(base_plugin.BasePlugin):
             window.append(now)
             self.flagged_count += 1
 
-        if len(window) >= self.max_suspicious_events:
+        # block từ lần vượt ngưỡng, không phải vừa chạm ngưỡng
+        if len(window) > self.max_suspicious_events:
             self.blocked_count += 1
             return self._block_response(
                 "Your session has been flagged for repeated suspicious requests. "

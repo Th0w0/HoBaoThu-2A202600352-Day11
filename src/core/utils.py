@@ -3,7 +3,7 @@ Lab 11 — Helper Utilities
 """
 from google.genai import types
 
-
+import uuid
 async def chat_with_agent(agent, runner, user_message: str, session_id=None):
     """Send a message to the agent and get the response.
 
