@@ -61,9 +61,10 @@ async def part2_guardrails():
 
     # Part 2B: Output guardrails
     print("\n--- Part 2B: Output Guardrails ---")
-    from guardrails.output_guardrails import test_content_filter, _init_judge
-    _init_judge()  # Initialize LLM judge if TODO 7 is done
+    from guardrails.output_guardrails import test_content_filter, test_llm_judge, _init_judge
+    _init_judge()
     test_content_filter()
+    await test_llm_judge()
 
     # Part 2C: NeMo Guardrails
     print("\n--- Part 2C: NeMo Guardrails ---")
@@ -121,7 +122,14 @@ async def part3_testing():
 
     audit_log.export_json("security_audit.json")
     monitor.check_metrics()
-
+async def test_rate_limit(agent, runner):
+    print("\n--- RATE LIMIT TEST ---")
+    for i in range(15):
+        try:
+            response, _ = await chat_with_agent(agent, runner, "Check balance")
+            print(f"{i+1}: PASS")
+        except:
+            print(f"{i+1}: BLOCKED")
 def part4_hitl():
     """Part 4: HITL design."""
     print("\n" + "=" * 60)

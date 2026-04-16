@@ -149,9 +149,8 @@ class SecurityTestPipeline:
         except Exception as e:
             response = f"Error: {e}"
             leaked = []
-            blocked = True
+            blocked = False 
             error = True
-
         return TestResult(
             attack_id=attack["id"],
             category=attack["category"],
