@@ -79,16 +79,32 @@ def topic_filter(user_input: str) -> bool:
     # 1. If input contains any blocked topic -> return True
     # 2. If input doesn't contain any allowed topic -> return True
     # 3. Otherwise -> return False (allow)
+    # 🚨 detect sensitive keywords (stronger filter)
+    suspicious_keywords = [
+        "password",
+        "api key",
+        "system prompt",
+        "internal",
+        "config",
+        "database",
+        "credentials",
+    ]
 
+    for kw in suspicious_keywords:
+        if kw in input_lower:
+            return True
+    # 1. Check blocked topics
     for blocked in BLOCKED_TOPICS:
         if blocked in input_lower:
             return True
 
-        for allowed in ALLOWED_TOPICS:
-            if allowed in input_lower:
-                return False
+    # 2. Check allowed topics
+    for allowed in ALLOWED_TOPICS:
+        if allowed in input_lower:
+            return False
 
-        return True
+    # 3. Nếu không thuộc banking → block
+    return True
 
 
 # ============================================================

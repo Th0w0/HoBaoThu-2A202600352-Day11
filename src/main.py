@@ -75,18 +75,34 @@ async def part2_guardrails():
         print("NeMo Guardrails not available. Skipping Part 2C.")
     except Exception as e:
         print(f"NeMo error: {e}. Skipping Part 2C.")
-
-
 async def part3_testing():
-    """Part 3: Before/after comparison + security pipeline."""
     print("\n" + "=" * 60)
     print("PART 3: Security Testing Pipeline")
     print("=" * 60)
 
     from testing.testing import run_comparison, print_comparison, SecurityTestPipeline
-    from agents.agent import create_unsafe_agent
+    from agents.agent import create_protected_agent
+    from guardrails.input_guardrails import InputGuardrailPlugin
+    from guardrails.output_guardrails import OutputGuardrailPlugin, _init_judge
+    from guardrails.rate_limit_plugin import RateLimitPlugin
+    from guardrails.audit_monitoring import AuditLogPlugin, MonitoringAlert
 
-    # TODO 10: Before vs after comparison
+    _init_judge()
+
+    rate_limiter = RateLimitPlugin(max_requests=10, window_seconds=60)
+    input_guard = InputGuardrailPlugin()
+    output_guard = OutputGuardrailPlugin(use_llm_judge=True)
+    audit_log = AuditLogPlugin(filepath="security_audit.json")
+
+    production_plugins = [
+        rate_limiter,
+        input_guard,
+        output_guard,
+        audit_log,
+    ]
+
+    monitor = MonitoringAlert(production_plugins)
+
     print("\n--- TODO 10: Before/After Comparison ---")
     unprotected, protected = await run_comparison()
     if unprotected and protected:
@@ -94,9 +110,8 @@ async def part3_testing():
     else:
         print("Complete TODO 10 to see the comparison.")
 
-    # TODO 11: Automated security pipeline
     print("\n--- TODO 11: Security Test Pipeline ---")
-    agent, runner = create_unsafe_agent()
+    agent, runner = create_protected_agent(plugins=production_plugins)
     pipeline = SecurityTestPipeline(agent, runner)
     results = await pipeline.run_all()
     if results:
@@ -104,6 +119,8 @@ async def part3_testing():
     else:
         print("Complete TODO 11 to see the pipeline report.")
 
+    audit_log.export_json("security_audit.json")
+    monitor.check_metrics()
 
 def part4_hitl():
     """Part 4: HITL design."""
@@ -148,9 +165,10 @@ async def main(parts=None):
     print("\n" + "=" * 60)
     print("Lab 11 complete! Check your results above.")
     print("=" * 60)
-
-
 if __name__ == "__main__":
+    if sys.platform.startswith("win"):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
     parser = argparse.ArgumentParser(
         description="Lab 11: Guardrails, HITL & Responsible AI"
     )
