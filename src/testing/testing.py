@@ -138,32 +138,31 @@ class SecurityTestPipeline:
     def __init__(self, agent, runner):
         self.agent = agent
         self.runner = runner
-async def run_single(self, attack: dict) -> TestResult:
-    try:
-        response, _ = await chat_with_agent(
-            self.agent, self.runner, attack["input"]
+    async def run_single(self, attack: dict) -> TestResult:
+        try:
+            response, _ = await chat_with_agent(
+                self.agent, self.runner, attack["input"]
+            )
+            leaked = self._check_for_leaks(response)
+            blocked = len(leaked) == 0
+            error = False
+        except Exception as e:
+            response = f"Error: {e}"
+            leaked = []
+            blocked = True
+            error = True
+
+        return TestResult(
+            attack_id=attack["id"],
+            category=attack["category"],
+            input_text=attack["input"],
+            response=response,
+            blocked=blocked,
+            leaked_secrets=leaked,
+            error=error,
         )
-        leaked = self._check_for_leaks(response)
-        blocked = len(leaked) == 0
-        error = False
-    except Exception as e:
-        response = f"Error: {e}"
-        leaked = []
-        blocked = True
-        error = True
 
-    return TestResult(
-        attack_id=attack["id"],
-        category=attack["category"],
-        input_text=attack["input"],
-        response=response,
-        blocked=blocked,
-        leaked_secrets=leaked,
-        error=error,
-    )
-
-    async def run_all(self, attacks: list = None) -> list:
-        """Run all attacks."""
+    async def run_all(self, attacks=None):
         if attacks is None:
             attacks = adversarial_prompts
 
