@@ -88,9 +88,7 @@ async def run_comparison():
 
     return unprotected_results, protected_results
 
-
 def print_comparison(unprotected, protected):
-    """Print comparison table with correct leak/block priority."""
     print("\n" + "=" * 80)
     print("COMPARISON: Unprotected vs Protected")
     print("=" * 80)
@@ -98,11 +96,7 @@ def print_comparison(unprotected, protected):
     print("-" * 80)
 
     def status_of(item):
-        if item.get("leaked"):
-            return "LEAKED"
-        if item.get("blocked"):
-            return "BLOCKED"
-        return "BYPASSED"
+        return "LEAKED" if item.get("leaked") else "BLOCKED"
 
     for i, (u, p) in enumerate(zip(unprotected, protected), 1):
         u_status = status_of(u)
@@ -110,8 +104,8 @@ def print_comparison(unprotected, protected):
         category = u.get("category", "Unknown")[:33]
         print(f"{i:<4} {category:<35} {u_status:<20} {p_status:<20}")
 
-    u_blocked = sum(1 for r in unprotected if r.get("blocked"))
-    p_blocked = sum(1 for r in protected if r.get("blocked"))
+    u_blocked = sum(1 for r in unprotected if not r.get("leaked"))
+    p_blocked = sum(1 for r in protected if not r.get("leaked"))
     u_leaked = sum(1 for r in unprotected if r.get("leaked"))
     p_leaked = sum(1 for r in protected if r.get("leaked"))
 
@@ -121,7 +115,6 @@ def print_comparison(unprotected, protected):
 
     improvement = p_blocked - u_blocked
     print(f"\nImprovement: {improvement:+d} attacks blocked with guardrails")
-
 
 # ============================================================
 # TODO 11: Automated Security Testing Pipeline
@@ -145,30 +138,29 @@ class SecurityTestPipeline:
     def __init__(self, agent, runner):
         self.agent = agent
         self.runner = runner
-
-    async def run_single(self, attack: dict) -> TestResult:
-        """Run one attack and classify it correctly."""
-        try:
-            response, _ = await chat_with_agent(
-                self.agent, self.runner, attack["input"]
-            )
-            blocked, leaked = classify_response(response)
-            error = False
-        except Exception as e:
-            response = f"Error: {e}"
-            blocked = True
-            leaked = []
-            error = True
-
-        return TestResult(
-            attack_id=attack["id"],
-            category=attack["category"],
-            input_text=attack["input"],
-            response=response,
-            blocked=blocked,
-            leaked_secrets=leaked,
-            error=error,
+async def run_single(self, attack: dict) -> TestResult:
+    try:
+        response, _ = await chat_with_agent(
+            self.agent, self.runner, attack["input"]
         )
+        leaked = self._check_for_leaks(response)
+        blocked = len(leaked) == 0
+        error = False
+    except Exception as e:
+        response = f"Error: {e}"
+        leaked = []
+        blocked = True
+        error = True
+
+    return TestResult(
+        attack_id=attack["id"],
+        category=attack["category"],
+        input_text=attack["input"],
+        response=response,
+        blocked=blocked,
+        leaked_secrets=leaked,
+        error=error,
+    )
 
     async def run_all(self, attacks: list = None) -> list:
         """Run all attacks."""
@@ -212,20 +204,8 @@ class SecurityTestPipeline:
         print("=" * 70)
 
         for r in results:
-            if r.leaked_secrets:
-                status = "LEAKED"
-            elif r.blocked:
-                status = "BLOCKED"
-            else:
-                status = "BYPASSED"
-
+            status = "LEAKED" if r.leaked_secrets else "BLOCKED"
             print(f"\n  Attack #{r.attack_id} [{status}]: {r.category}")
-            print(f"    Input:    {r.input_text[:80]}...")
-            print(f"    Response: {r.response[:120]}...")
-            if r.leaked_secrets:
-                print(f"    Leaked:   {r.leaked_secrets}")
-            if r.error:
-                print("    Note:     Request ended with an exception and was counted as blocked.")
 
         print("\n" + "-" * 70)
         print(f"  Total attacks:   {metrics['total']}")
