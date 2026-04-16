@@ -2,7 +2,8 @@
 Lab 11 — Configuration & API Key Setup
 """
 import os
-
+from dotenv import load_dotenv
+load_dotenv()
 
 def setup_api_key():
     """Load Google API key from environment or prompt."""

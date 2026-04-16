@@ -41,12 +41,11 @@ def content_filter(response: str) -> dict:
 
     # PII patterns to check
     PII_PATTERNS = {
-        # TODO: Add regex patterns for:
-        # - VN phone number: r"0\d{9,10}"
-        # - Email: r"[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}"
-        # - National ID (CMND/CCCD): r"\b\d{9}\b|\b\d{12}\b"
-        # - API key pattern: r"sk-[a-zA-Z0-9-]+"
-        # - Password pattern: r"password\s*[:=]\s*\S+"
+        "vn_phone": r"0\d{9,10}",
+        "email": r"[\w\.-]+@[\w\.-]+\.[a-zA-Z]{2,}",
+        "national_id": r"\b\d{9}\b|\b\d{12}\b",
+        "api_key": r"sk-[a-zA-Z0-9-]+",
+        "password": r"(?:admin\s+password|password)\s*(?:is|:|=)\s*\S+",
     }
 
     for name, pattern in PII_PATTERNS.items():
@@ -97,7 +96,11 @@ If UNSAFE, add a brief reason on the next line.
 #     instruction=SAFETY_JUDGE_INSTRUCTION,
 # )
 
-safety_judge_agent = None  # TODO: Replace with implementation
+safety_judge_agent = llm_agent.LlmAgent(
+    model="gemini-2.0-flash",
+    name="safety_judge",
+    instruction=SAFETY_JUDGE_INSTRUCTION,
+) # TODO: Replace with implementation
 judge_runner = None
 
 
@@ -180,6 +183,25 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
         #    - If unsafe: replace llm_response.content with a safe message
         #    - Increment self.blocked_count
         # 3. Return llm_response (possibly modified)
+        filter_result = content_filter(response_text)
+
+        if not filter_result["safe"]:
+            self.redacted_count += 1
+            llm_response.content = types.Content(
+                role="model",
+                parts=[types.Part.from_text(text=filter_result["redacted"])],
+            )
+
+        if self.use_llm_judge:
+            judge_result = await llm_safety_check(filter_result["redacted"])
+            if not judge_result["safe"]:
+                self.blocked_count += 1
+                llm_response.content = types.Content(
+                    role="model",
+                    parts=[types.Part.from_text(
+                        text="I’m sorry, but I can’t provide that response."
+                    )],
+                )
 
         return llm_response  # TODO: modify if needed
 

@@ -84,13 +84,40 @@ class ConfidenceRouter:
         #      action="escalate", priority="high",
         #      requires_human=True, reason="Low confidence — escalating"
 
+        if action_type in HIGH_RISK_ACTIONS:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason=f"High-risk action: {action_type}",
+                priority="high",
+                requires_human=True,
+            )
+
+        if confidence >= self.HIGH_THRESHOLD:
+            return RoutingDecision(
+                action="auto_send",
+                confidence=confidence,
+                reason="High confidence",
+                priority="low",
+                requires_human=False,
+            )
+
+        if confidence >= self.MEDIUM_THRESHOLD:
+            return RoutingDecision(
+                action="queue_review",
+                confidence=confidence,
+                reason="Medium confidence — needs review",
+                priority="normal",
+                requires_human=True,
+            )
+
         return RoutingDecision(
-            action="auto_send",
+            action="escalate",
             confidence=confidence,
-            reason="TODO: implement routing logic",
-            priority="low",
-            requires_human=False,
-        )  # TODO: Replace with implementation
+            reason="Low confidence — escalating",
+            priority="high",
+            requires_human=True,
+        )
 
 
 # ============================================================
@@ -105,34 +132,32 @@ class ConfidenceRouter:
 #
 # Think about real banking scenarios where human judgment is critical.
 # ============================================================
-
 hitl_decision_points = [
     {
         "id": 1,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "High-value transaction approval",
+        "trigger": "Request involves a high-risk financial action such as transfer_money or close_account, especially for large amounts or unusual requests.",
+        "hitl_model": "human-in-the-loop",
+        "context_needed": "User identity, account status, transaction amount, destination account, recent activity, and the model's proposed action.",
+        "example": "A user asks the assistant to transfer 500,000,000 VND to a new beneficiary. The request is paused until a human reviewer verifies it.",
     },
     {
         "id": 2,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Ambiguous or low-confidence customer support response",
+        "trigger": "Model confidence is below threshold or the request is ambiguous, complex, or potentially misunderstood.",
+        "hitl_model": "human-as-tiebreaker",
+        "context_needed": "Original user query, confidence score, candidate responses, relevant banking policy, and any failed guardrail or judge results.",
+        "example": "A customer asks whether a disputed transaction can be reversed, but the request lacks enough detail. A human reviewer decides the correct next step.",
     },
     {
         "id": 3,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Sensitive account changes and personal data updates",
+        "trigger": "User requests password changes, personal info updates, account closure, or deletion of personal data.",
+        "hitl_model": "human-on-the-loop",
+        "context_needed": "Requested change, identity verification status, account ownership details, audit trail, and any risk flags from fraud detection.",
+        "example": "A user asks to change the phone number and mailing address on an account. The AI drafts the response, but a human approves before execution.",
     },
 ]
-
 
 # ============================================================
 # Quick tests
