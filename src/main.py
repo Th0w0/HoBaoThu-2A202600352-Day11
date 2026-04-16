@@ -59,7 +59,13 @@ async def test_rate_limit(agent, runner):
     print("RATE LIMIT TEST")
     print("=" * 60)
     print("Expected: first 10 pass, last 5 blocked")
+    rate_limiter.user_windows.clear()
+    rate_limiter.blocked_count = 0
+    rate_limiter.total_count = 0
 
+    for plugin in [rate_limiter]:
+        if hasattr(plugin, "user_events"):
+            plugin.user_events.clear()
     passed = 0
     blocked = 0
 
