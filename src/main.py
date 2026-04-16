@@ -206,7 +206,12 @@ async def test_rate_limit(agent, runner):
     print("\n--- RATE LIMIT TEST ---")
     for i in range(15):
         try:
-            response, _ = await chat_with_agent(agent, runner, "Check balance")
+            response, _ = await chat_with_agent(
+                agent,
+                runner,
+                "What is my account balance?",
+                user_id="test_user"   # 🔥 QUAN TRỌNG
+            )
             print(f"{i+1}: PASS")
         except:
             print(f"{i+1}: BLOCKED")
