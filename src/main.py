@@ -170,7 +170,7 @@ async def part3_testing():
     pipeline.print_report(results)
 
     await test_safe_queries(agent, runner)
-    await test_rate_limit(agent, runner, rate_limiter)
+    await test_rate_limit(agent, runner, rate_limiter, session_guard)
     await test_edge_cases(agent, runner)
     await test_session_anomaly_detector(agent, runner)
 
@@ -178,40 +178,53 @@ async def part3_testing():
     print("Audit log exported to security_audit.json")
 
     monitor.check_metrics()
-async def test_rate_limit(agent, runner, rate_limiter):
+async def test_rate_limit(agent, runner, rate_limiter, session_guard):
     print("\n--- RATE LIMIT TEST ---")
     print("Expected: first 10 pass, last 5 blocked")
 
-    # 🔥 RESET TẤT CẢ STATE
+    # RESET STATE
     rate_limiter.user_windows.clear()
     rate_limiter.blocked_count = 0
     rate_limiter.total_count = 0
 
-    # reset anomaly detector nếu có
-    for plugin in agent._plugins:   # ⚠️ dùng _plugins (private)
-        if hasattr(plugin, "user_events"):
-            plugin.user_events.clear()
-            plugin.blocked_count = 0
-            plugin.flagged_count = 0
+    session_guard.user_events.clear()
+    session_guard.blocked_count = 0
+    session_guard.flagged_count = 0
 
     passed = 0
     blocked = 0
 
     for i in range(15):
-        response, _ = await chat_with_agent(
+        response, _ = await safe_call(
             agent,
             runner,
-            "Check balance"   # 🔥 đổi query
+            "Check balance"
         )
 
-        if "rate limit exceeded" in response.lower():
+        if isinstance(response, str) and "rate limit exceeded" in response.lower():
             print(f"{i+1}: BLOCKED")
             blocked += 1
         else:
             print(f"{i+1}: PASS")
             passed += 1
 
+        await asyncio.sleep(0.2)  # 🔥 giảm tải API
+
     print(f"\nRate limit summary: PASS={passed}, BLOCKED={blocked}")
+import asyncio
+
+async def safe_call(agent, runner, message):
+    for _ in range(3):  # retry 3 lần
+        try:
+            return await chat_with_agent(agent, runner, message)
+        except Exception as e:
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                await asyncio.sleep(1)  # chờ rồi retry
+            else:
+                raise
+    # fallback nếu vẫn lỗi
+    return "ERROR", None
+    
 def part4_hitl():
     """Part 4: HITL design."""
     print("\n" + "=" * 60)
